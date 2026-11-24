@@ -1,0 +1,64 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Document {
+  id             String    @id @default(cuid())
+  driveFileId    String?   @unique
+  title          String
+  category       String    // "PM Report" | "Infrastruktur" | "Vendor/Logistik" | "Administrasi"
+  location       String    // "GTI Ragunan" | "ODC Sentul"
+  summary        String
+  contentExcerpt String?
+  fileType       String    @default("PDF")
+  fileSize       String?
+  externalUrl    String
+  author         String?
+  tags           String?
+  documentDate   DateTime  @default(now())
+  lastSyncedAt   DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([category])
+  @@index([location])
+  @@index([documentDate])
+}
+
+model Asset {
+  id             String   @id @default(cuid())
+  name           String
+  deviceType     String   @default("Server") // "Server" | "Storage" | "SAN Switch" | "Hypervisor" | "Backup Appliance"
+  cluster        String
+  wwn            String
+  location       String   // "GTI Ragunan" | "ODC Sentul"
+  rackCoordinate String
+  serialNumber   String   @unique
+  status         String   @default("Active") // "Active" | "Maintenance" | "Standby" | "Decommissioned"
+  vendorModel    String?
+  ipManagement   String?
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([location])
+  @@index([status])
+  @@index([cluster])
+}
+
+model SyncLog {
+  id          String   @id @default(cuid())
+  source      String   @default("google_drive")
+  folderId    String?
+  authMode    String
+  status      String   // "success" | "partial" | "failed" | "dry_run"
+  filesFound  Int      @default(0)
+  filesSynced Int      @default(0)
+  message     String?
+  createdAt   DateTime @default(now())
+}
