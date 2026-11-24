@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import crypto from "node:crypto";
 import { prisma } from "@/lib/prisma";
+import { uploadDocumentFile } from "@/lib/storage";
 
 const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024; // 25 MB
-const UPLOAD_DIR = path.join(process.cwd(), "storage", "uploads");
 
 const ALLOWED_EXTENSIONS = new Set([
   ".pdf",
@@ -61,7 +59,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    let storedFileName: string | null = null;
+    let storedFilePath: string | null = null;
     let originalFileName: string | null = null;
     let mimeType: string | null = null;
     let fileSize: string | null = null;
@@ -87,22 +85,15 @@ export async function POST(request: NextRequest) {
 
       const arrayBuffer = await file.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
+      const resolvedMime = file.type || "application/octet-stream";
 
-      await mkdir(UPLOAD_DIR, { recursive: true });
-      const safeBase = path
-        .basename(file.name, ext)
-        .replace(/[^a-zA-Z0-9_-]/g, "_")
-        .slice(0, 60);
-      storedFileName = `${Date.now()}-${crypto.randomBytes(6).toString("hex")}-${safeBase}${ext}`;
-
-      await writeFile(path.join(UPLOAD_DIR, storedFileName), buffer);
-
+      const uploaded = await uploadDocumentFile(buffer, file.name, resolvedMime);
+      storedFilePath = uploaded.filePath;
       originalFileName = file.name;
-      mimeType = file.type || "application/octet-stream";
+      mimeType = resolvedMime;
       fileSize = formatBytes(file.size);
       fileType = getFileTypeLabel(ext);
 
-      // Auto-extract text excerpt for plain text / csv / md / json files
       if (!contentExcerpt && [".txt", ".csv", ".md", ".json"].includes(ext)) {
         const text = buffer.toString("utf-8").trim();
         if (text) {
@@ -120,7 +111,7 @@ export async function POST(request: NextRequest) {
         contentExcerpt,
         fileType,
         fileSize,
-        filePath: storedFileName,
+        filePath: storedFilePath,
         originalFileName,
         mimeType,
         externalUrl,
@@ -133,9 +124,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ document: created }, { status: 201 });
   } catch (error) {
     console.error("[POST /api/documents/upload]", error);
-    return NextResponse.json(
-      { error: "Gagal mengunggah dokumen ke penyimpanan lokal." },
-      { status: 500 }
-    );
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Gagal mengunggah dokumen ke penyimpanan.";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

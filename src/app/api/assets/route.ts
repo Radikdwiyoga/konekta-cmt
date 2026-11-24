@@ -22,14 +22,14 @@ export async function GET(request: NextRequest) {
     }
     if (q) {
       where.OR = [
-        { name: { contains: q } },
-        { cluster: { contains: q } },
-        { wwn: { contains: q } },
-        { location: { contains: q } },
-        { rackCoordinate: { contains: q } },
-        { serialNumber: { contains: q } },
-        { vendorModel: { contains: q } },
-        { ipManagement: { contains: q } },
+        { name: { contains: q, mode: "insensitive" } },
+        { cluster: { contains: q, mode: "insensitive" } },
+        { wwn: { contains: q, mode: "insensitive" } },
+        { location: { contains: q, mode: "insensitive" } },
+        { rackCoordinate: { contains: q, mode: "insensitive" } },
+        { serialNumber: { contains: q, mode: "insensitive" } },
+        { vendorModel: { contains: q, mode: "insensitive" } },
+        { ipManagement: { contains: q, mode: "insensitive" } },
       ];
     }
 

@@ -20,12 +20,12 @@ export async function GET(request: NextRequest) {
 
     if (q) {
       where.OR = [
-        { title: { contains: q } },
-        { summary: { contains: q } },
-        { contentExcerpt: { contains: q } },
-        { tags: { contains: q } },
-        { author: { contains: q } },
-        { driveFileId: { contains: q } },
+        { title: { contains: q, mode: "insensitive" } },
+        { summary: { contains: q, mode: "insensitive" } },
+        { contentExcerpt: { contains: q, mode: "insensitive" } },
+        { tags: { contains: q, mode: "insensitive" } },
+        { author: { contains: q, mode: "insensitive" } },
+        { driveFileId: { contains: q, mode: "insensitive" } },
       ];
     }
 

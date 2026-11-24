@@ -216,7 +216,7 @@ export function DocumentHubClient({
             Document Hub & Arsip Operasional
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            Upload langsung dokumen ke penyimpanan lokal SQLite atau sinkronkan arsip PM Report, Infrastruktur, Vendor, dan Administrasi.
+            Upload dokumen langsung ke penyimpanan aman (Supabase Storage / lokal) atau kelola arsip PM Report, Infrastruktur, Vendor, dan Administrasi.
           </p>
         </div>
 

@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readFile } from "node:fs/promises";
-import path from "node:path";
 import { prisma } from "@/lib/prisma";
-
-const UPLOAD_DIR = path.join(process.cwd(), "storage", "uploads");
+import { resolveDocumentFile } from "@/lib/storage";
 
 export async function GET(
   request: NextRequest,
@@ -15,32 +12,36 @@ export async function GET(
 
     if (!document || !document.filePath) {
       return NextResponse.json(
-        { error: "File lokal untuk dokumen ini tidak ditemukan." },
+        { error: "File untuk dokumen ini tidak ditemukan." },
         { status: 404 }
       );
     }
 
-    // Prevent path traversal by forcing basename only
-    const safeName = path.basename(document.filePath);
-    const fullPath = path.join(UPLOAD_DIR, safeName);
-    const fileBuffer = await readFile(fullPath);
-
     const { searchParams } = new URL(request.url);
     const forceDownload = searchParams.get("download") === "1";
-    const downloadName = (document.originalFileName || safeName).replace(/"/g, "");
 
-    return new NextResponse(fileBuffer, {
+    const resolved = await resolveDocumentFile(
+      document.filePath,
+      document.originalFileName,
+      forceDownload
+    );
+
+    if (resolved.type === "redirect") {
+      return NextResponse.redirect(resolved.url, { status: 302 });
+    }
+
+    return new NextResponse(new Uint8Array(resolved.buffer), {
       status: 200,
       headers: {
         "Content-Type": document.mimeType || "application/octet-stream",
-        "Content-Disposition": `${forceDownload ? "attachment" : "inline"}; filename="${downloadName}"`,
+        "Content-Disposition": `${forceDownload ? "attachment" : "inline"}; filename="${resolved.downloadName}"`,
         "X-Content-Type-Options": "nosniff",
       },
     });
   } catch (error) {
     console.error("[GET /api/documents/[id]/file]", error);
     return NextResponse.json(
-      { error: "Gagal membaca file dari penyimpanan lokal." },
+      { error: "Gagal mengambil file dokumen." },
       { status: 404 }
     );
   }
