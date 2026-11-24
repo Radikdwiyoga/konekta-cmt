@@ -8,22 +8,25 @@ datasource db {
 }
 
 model Document {
-  id             String    @id @default(cuid())
-  driveFileId    String?   @unique
-  title          String
-  category       String    // "PM Report" | "Infrastruktur" | "Vendor/Logistik" | "Administrasi"
-  location       String    // "GTI Ragunan" | "ODC Sentul"
-  summary        String
-  contentExcerpt String?
-  fileType       String    @default("PDF")
-  fileSize       String?
-  externalUrl    String
-  author         String?
-  tags           String?
-  documentDate   DateTime  @default(now())
-  lastSyncedAt   DateTime?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id               String    @id @default(cuid())
+  driveFileId      String?   @unique
+  title            String
+  category         String    // "PM Report" | "Infrastruktur" | "Vendor/Logistik" | "Administrasi"
+  location         String    // "GTI Ragunan" | "ODC Sentul"
+  summary          String
+  contentExcerpt   String?
+  fileType         String    @default("PDF")
+  fileSize         String?
+  filePath         String?
+  originalFileName String?
+  mimeType         String?
+  externalUrl      String?
+  author           String?
+  tags             String?
+  documentDate     DateTime  @default(now())
+  lastSyncedAt     DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   @@index([category])
   @@index([location])

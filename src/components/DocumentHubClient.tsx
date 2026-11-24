@@ -9,12 +9,14 @@ import {
   User,
   Tag,
   MapPin,
-  Folder,
-  Plus,
+  Upload,
+  Download,
   X,
   HardDrive,
   Clock,
   Trash2,
+  Paperclip,
+  Eye,
 } from "lucide-react";
 import {
   DOCUMENT_CATEGORIES,
@@ -35,7 +37,10 @@ export interface DocumentItem {
   contentExcerpt: string | null;
   fileType: string;
   fileSize: string | null;
-  externalUrl: string;
+  filePath: string | null;
+  originalFileName: string | null;
+  mimeType: string | null;
+  externalUrl: string | null;
   author: string | null;
   tags: string | null;
   documentDate: string;
@@ -63,14 +68,13 @@ export function DocumentHubClient({
   const [showAddModal, setShowAddModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
-  // Form state for manual document addition
   const [formState, setFormState] = useState({
     title: "",
     category: "PM Report",
     location: "GTI Ragunan",
     fileType: "PDF",
-    fileSize: "",
     author: "",
     externalUrl: "",
     tags: "",
@@ -86,7 +90,6 @@ export function DocumentHubClient({
     }
   };
 
-  // Real-time client filtering for instant responsiveness
   const filteredDocuments = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return documents.filter((doc) => {
@@ -106,6 +109,7 @@ export function DocumentHubClient({
         doc.category,
         doc.location,
         doc.fileType,
+        doc.originalFileName || "",
         doc.driveFileId || "",
       ]
         .join(" ")
@@ -114,7 +118,6 @@ export function DocumentHubClient({
     });
   }, [documents, searchQuery, selectedCategory, selectedLocation]);
 
-  // Keep selected document synchronized with filtered results
   useEffect(() => {
     if (filteredDocuments.length === 0) {
       setSelectedDocId(null);
@@ -130,30 +133,54 @@ export function DocumentHubClient({
     [filteredDocuments, selectedDocId]
   );
 
-  const handleCreateDocument = async (e: React.FormEvent) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null;
+    setSelectedFile(file);
+    if (file && !formState.title.trim()) {
+      const cleanTitle = file.name.replace(/\.[^/.]+$/, "").replace(/[_-]+/g, " ");
+      setFormState((prev) => ({ ...prev, title: cleanTitle }));
+    }
+  };
+
+  const handleUploadDocument = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
     setFormError(null);
+
     try {
-      const res = await fetch("/api/documents", {
+      const fd = new FormData();
+      if (selectedFile) {
+        fd.append("file", selectedFile);
+      }
+      fd.append("title", formState.title);
+      fd.append("category", formState.category);
+      fd.append("location", formState.location);
+      fd.append("fileType", formState.fileType);
+      fd.append("author", formState.author);
+      fd.append("externalUrl", formState.externalUrl);
+      fd.append("tags", formState.tags);
+      fd.append("summary", formState.summary);
+      fd.append("contentExcerpt", formState.contentExcerpt);
+
+      const res = await fetch("/api/documents/upload", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formState),
+        body: fd,
       });
       const data = await res.json();
       if (!res.ok) {
-        setFormError(data.error || "Gagal menyimpan dokumen.");
+        setFormError(data.error || "Gagal mengunggah dokumen.");
         return;
       }
+
       await refreshDocuments();
       setSelectedDocId(data.document.id);
       setShowAddModal(false);
+      setSelectedFile(null);
       setFormState({
         title: "",
         category: "PM Report",
         location: "GTI Ragunan",
         fileType: "PDF",
-        fileSize: "",
         author: "",
         externalUrl: "",
         tags: "",
@@ -161,14 +188,16 @@ export function DocumentHubClient({
         contentExcerpt: "",
       });
     } catch {
-      setFormError("Terjadi kesalahan jaringan.");
+      setFormError("Terjadi kesalahan jaringan saat mengunggah dokumen.");
     } finally {
       setSubmitting(false);
     }
   };
 
   const handleDeleteDocument = async (id: string) => {
-    if (!window.confirm("Hapus dokumen ini dari katalog Document Hub?")) return;
+    if (!window.confirm("Hapus dokumen ini (beserta file lokal jika ada) dari Document Hub?")) {
+      return;
+    }
     const res = await fetch(`/api/documents/${id}`, { method: "DELETE" });
     if (res.ok) {
       await refreshDocuments();
@@ -187,7 +216,7 @@ export function DocumentHubClient({
             Document Hub & Arsip Operasional
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            Pencarian real-time untuk PM Report, topologi infrastruktur, vendor/logistik, dan administrasi DC.
+            Upload langsung dokumen ke penyimpanan lokal SQLite atau sinkronkan arsip PM Report, Infrastruktur, Vendor, dan Administrasi.
           </p>
         </div>
 
@@ -196,11 +225,15 @@ export function DocumentHubClient({
           <button
             type="button"
             id="add-document-btn"
-            onClick={() => setShowAddModal(true)}
+            onClick={() => {
+              setFormError(null);
+              setSelectedFile(null);
+              setShowAddModal(true);
+            }}
             className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-2 text-xs font-medium text-white shadow-2xs transition hover:bg-blue-700 sm:text-sm"
           >
-            <Plus className="h-4 w-4" />
-            <span>Tambah Dokumen</span>
+            <Upload className="h-4 w-4" />
+            <span>Upload Dokumen</span>
           </button>
         </div>
       </div>
@@ -208,7 +241,6 @@ export function DocumentHubClient({
       {/* Filter & Real-time Search Toolbar */}
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-2xs space-y-3.5">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-          {/* Search Input */}
           <div className="relative flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
@@ -216,7 +248,7 @@ export function DocumentHubClient({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Cari judul dokumen, kata kunci isi, tag (mis. powerstore, wwn, rma, sop), atau PIC..."
+              placeholder="Cari judul dokumen, kata kunci isi, nama file, tag (mis. powerstore, wwn, rma), atau PIC..."
               className="w-full rounded-lg border border-slate-200 bg-slate-50/70 py-2 pl-9 pr-9 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/15"
             />
             {searchQuery && (
@@ -231,7 +263,6 @@ export function DocumentHubClient({
             )}
           </div>
 
-          {/* Location Filter */}
           <div className="flex items-center gap-1.5">
             <span className="text-xs font-medium text-slate-500 mr-1 hidden sm:inline">
               Lokasi:
@@ -264,7 +295,6 @@ export function DocumentHubClient({
           </div>
         </div>
 
-        {/* Category Filter Tabs */}
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
           <div className="flex flex-wrap items-center gap-1.5">
             <button
@@ -313,7 +343,7 @@ export function DocumentHubClient({
                 Tidak ada dokumen yang cocok dengan filter Anda
               </p>
               <p className="mt-1 text-xs text-slate-500">
-                Coba ubah kata kunci pencarian, kategori, atau lokasi data center.
+                Coba ubah kata kunci pencarian atau upload dokumen baru.
               </p>
             </div>
           ) : (
@@ -338,6 +368,12 @@ export function DocumentHubClient({
                         <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono-tech text-[10px] font-semibold text-slate-600">
                           {doc.fileType}
                         </span>
+                        {doc.filePath && (
+                          <span className="inline-flex items-center gap-1 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
+                            <Paperclip className="h-2.5 w-2.5" />
+                            Local File
+                          </span>
+                        )}
                         {doc.fileSize && (
                           <span className="font-mono-tech text-[11px] text-slate-400">
                             {doc.fileSize}
@@ -377,12 +413,11 @@ export function DocumentHubClient({
               <div className="p-10 text-center">
                 <FileText className="mx-auto h-8 w-8 text-slate-300" />
                 <p className="mt-2 text-xs text-slate-500">
-                  Pilih dokumen di sisi kiri untuk melihat ringkasan dan membuka link eksternal.
+                  Pilih dokumen di sisi kiri untuk melihat ringkasan dan membuka atau mengunduh file.
                 </p>
               </div>
             ) : (
               <div>
-                {/* Preview Header */}
                 <div className="border-b border-slate-200 bg-slate-50/80 px-5 py-4">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
@@ -410,7 +445,6 @@ export function DocumentHubClient({
                   </div>
                 </div>
 
-                {/* Metadata Grid */}
                 <div className="grid grid-cols-2 gap-3 border-b border-slate-100 px-5 py-3.5 text-xs">
                   <div>
                     <span className="flex items-center gap-1 text-[11px] text-slate-400">
@@ -436,17 +470,18 @@ export function DocumentHubClient({
                   </div>
                   <div>
                     <span className="flex items-center gap-1 text-[11px] text-slate-400">
-                      <Clock className="h-3 w-3" /> Last Synced
+                      <Clock className="h-3 w-3" /> Sumber Penyimpanan
                     </span>
                     <p className="mt-0.5 font-medium text-slate-800">
-                      {selectedDoc.lastSyncedAt
+                      {selectedDoc.filePath
+                        ? "Upload Lokal (Aman)"
+                        : selectedDoc.lastSyncedAt
                         ? formatDateTimeId(selectedDoc.lastSyncedAt)
-                        : "Manual Entry"}
+                        : "Link Eksternal"}
                     </p>
                   </div>
                 </div>
 
-                {/* Body Summary & Excerpt */}
                 <div className="space-y-4 px-5 py-4">
                   <div>
                     <h4 className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
@@ -488,6 +523,18 @@ export function DocumentHubClient({
                     </div>
                   )}
 
+                  {selectedDoc.originalFileName && (
+                    <div className="flex items-center justify-between rounded-md bg-emerald-50/70 px-3 py-2 text-[11px] text-emerald-800 border border-emerald-200/70">
+                      <span className="inline-flex items-center gap-1.5">
+                        <Paperclip className="h-3.5 w-3.5 text-emerald-600" />
+                        File Terlampir
+                      </span>
+                      <span className="font-mono-tech truncate max-w-[200px]">
+                        {selectedDoc.originalFileName}
+                      </span>
+                    </div>
+                  )}
+
                   {selectedDoc.driveFileId && (
                     <div className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2 text-[11px] text-slate-500 border border-slate-200/70">
                       <span className="inline-flex items-center gap-1.5">
@@ -502,17 +549,44 @@ export function DocumentHubClient({
                 </div>
 
                 {/* Action Footer */}
-                <div className="border-t border-slate-200 bg-slate-50/70 px-5 py-3.5">
-                  <a
-                    id="open-external-doc-link"
-                    href={selectedDoc.externalUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-xs font-semibold text-white shadow-2xs transition hover:bg-blue-700"
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                    <span>Buka Link Eksternal Dokumen</span>
-                  </a>
+                <div className="border-t border-slate-200 bg-slate-50/70 px-5 py-3.5 space-y-2">
+                  {selectedDoc.filePath && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <a
+                        href={`/api/documents/${selectedDoc.id}/file`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2.5 text-xs font-semibold text-white shadow-2xs transition hover:bg-blue-700"
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                        <span>Buka File</span>
+                      </a>
+                      <a
+                        href={`/api/documents/${selectedDoc.id}/file?download=1`}
+                        className="flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-700 shadow-2xs transition hover:bg-slate-100"
+                      >
+                        <Download className="h-3.5 w-3.5 text-blue-600" />
+                        <span>Unduh File</span>
+                      </a>
+                    </div>
+                  )}
+
+                  {selectedDoc.externalUrl && (
+                    <a
+                      id="open-external-doc-link"
+                      href={selectedDoc.externalUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-xs font-semibold shadow-2xs transition ${
+                        selectedDoc.filePath
+                          ? "border border-slate-200 bg-white text-slate-700 hover:bg-slate-100"
+                          : "bg-blue-600 text-white hover:bg-blue-700"
+                      }`}
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      <span>Buka Link Eksternal Dokumen</span>
+                    </a>
+                  )}
                 </div>
               </div>
             )}
@@ -520,15 +594,15 @@ export function DocumentHubClient({
         </aside>
       </div>
 
-      {/* Add Document Modal */}
+      {/* Upload / Add Document Modal */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-[1px]">
           <div className="w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl">
             <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3.5">
               <div className="flex items-center gap-2">
-                <Folder className="h-4 w-4 text-blue-600" />
+                <Upload className="h-4 w-4 text-blue-600" />
                 <h2 className="text-sm font-semibold text-slate-900">
-                  Tambah Dokumen ke Document Hub
+                  Upload Dokumen ke Penyimpanan Lokal
                 </h2>
               </div>
               <button
@@ -540,12 +614,46 @@ export function DocumentHubClient({
               </button>
             </div>
 
-            <form onSubmit={handleCreateDocument} className="p-5 space-y-4">
+            <form onSubmit={handleUploadDocument} className="p-5 space-y-4">
               {formError && (
                 <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
                   {formError}
                 </div>
               )}
+
+              {/* File Dropzone */}
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">
+                  File Dokumen (PDF, DOCX, XLSX, PPTX, CSV, TXT, PNG/JPG — Maks 25 MB)
+                </label>
+                <label className="flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-slate-300 bg-slate-50/70 px-4 py-5 text-center transition hover:border-blue-500 hover:bg-blue-50/20">
+                  <Upload className="h-5 w-5 text-blue-600" />
+                  {selectedFile ? (
+                    <div className="mt-1.5">
+                      <p className="text-xs font-semibold text-slate-900">{selectedFile.name}</p>
+                      <p className="mt-0.5 font-mono-tech text-[11px] text-emerald-700">
+                        {(selectedFile.size / 1024).toFixed(1)} KB • Siap diunggah
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="mt-1.5">
+                      <p className="text-xs font-medium text-slate-700">
+                        Klik untuk memilih file dari komputer Anda
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-slate-400">
+                        File disimpan aman di server lokal (SQLite + storage/uploads)
+                      </p>
+                    </div>
+                  )}
+                  <input
+                    id="document-file-input"
+                    type="file"
+                    accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.txt,.md,.json,.png,.jpg,.jpeg"
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                </label>
+              </div>
 
               <div>
                 <label className="block text-xs font-medium text-slate-700">
@@ -561,7 +669,7 @@ export function DocumentHubClient({
                 />
               </div>
 
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label className="block text-xs font-medium text-slate-700">Kategori *</label>
                   <select
@@ -591,30 +699,13 @@ export function DocumentHubClient({
                     ))}
                   </select>
                 </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-slate-700">Tipe File</label>
-                  <select
-                    value={formState.fileType}
-                    onChange={(e) => setFormState({ ...formState, fileType: e.target.value })}
-                    className="mt-1 w-full rounded-lg border border-slate-200 px-2.5 py-2 text-xs focus:border-blue-500 focus:outline-none"
-                  >
-                    <option value="PDF">PDF</option>
-                    <option value="GDOC">GDOC</option>
-                    <option value="GSHEET">GSHEET</option>
-                    <option value="XLSX">XLSX</option>
-                    <option value="DOCX">DOCX</option>
-                    <option value="TXT">TXT</option>
-                  </select>
-                </div>
               </div>
 
               <div>
                 <label className="block text-xs font-medium text-slate-700">
-                  Link Eksternal (Google Drive / SharePoint / Confluence) *
+                  Link Eksternal (Opsional — isi jika juga ada link Drive/SharePoint)
                 </label>
                 <input
-                  required
                   type="url"
                   value={formState.externalUrl}
                   onChange={(e) => setFormState({ ...formState, externalUrl: e.target.value })}
@@ -664,7 +755,7 @@ export function DocumentHubClient({
 
               <div>
                 <label className="block text-xs font-medium text-slate-700">
-                  Cuplikan Isi / Catatan Teknis (Opsional)
+                  Cuplikan Isi / Catatan Teknis (Opsional — otomatis diekstrak untuk TXT/CSV/MD)
                 </label>
                 <textarea
                   rows={3}
@@ -688,7 +779,7 @@ export function DocumentHubClient({
                   disabled={submitting}
                   className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-60"
                 >
-                  {submitting ? "Menyimpan..." : "Simpan Dokumen"}
+                  {submitting ? "Mengunggah..." : "Simpan & Upload"}
                 </button>
               </div>
             </form>

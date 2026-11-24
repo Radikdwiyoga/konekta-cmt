@@ -380,15 +380,17 @@ export default async function DashboardPage() {
                       </span>
                     </div>
                   </div>
-                  <a
-                    href={doc.externalUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title="Buka link eksternal"
-                    className="shrink-0 rounded-md border border-slate-200 p-1.5 text-slate-500 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600"
-                  >
-                    <ExternalLink className="h-3.5 w-3.5" />
-                  </a>
+                  {(doc.filePath || doc.externalUrl) && (
+                    <a
+                      href={doc.filePath ? `/api/documents/${doc.id}/file` : doc.externalUrl!}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={doc.filePath ? "Buka file lokal" : "Buka link eksternal"}
+                      className="shrink-0 rounded-md border border-slate-200 p-1.5 text-slate-500 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                  )}
                 </div>
               ))}
             </div>

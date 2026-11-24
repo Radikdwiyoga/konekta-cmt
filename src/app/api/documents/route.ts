@@ -64,9 +64,9 @@ export async function POST(request: NextRequest) {
       documentDate,
     } = body;
 
-    if (!title?.trim() || !category?.trim() || !location?.trim() || !summary?.trim() || !externalUrl?.trim()) {
+    if (!title?.trim() || !category?.trim() || !location?.trim() || !summary?.trim()) {
       return NextResponse.json(
-        { error: "Judul, kategori, lokasi, ringkasan, dan link eksternal wajib diisi." },
+        { error: "Judul, kategori, lokasi, dan ringkasan wajib diisi." },
         { status: 400 }
       );
     }
@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
         contentExcerpt: contentExcerpt?.trim() || null,
         fileType: (fileType?.trim() || "PDF").toUpperCase(),
         fileSize: fileSize?.trim() || null,
-        externalUrl: externalUrl.trim(),
+        externalUrl: externalUrl?.trim() || null,
         author: author?.trim() || "Tim Maintenance Computes",
         tags: tags?.trim() || null,
         documentDate: documentDate ? new Date(documentDate) : new Date(),
